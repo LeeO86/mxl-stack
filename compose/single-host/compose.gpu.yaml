@@ -34,6 +34,11 @@ services:
       NVIDIA_DRIVER_CAPABILITIES: compute,utility,graphics
       BROWSER_RENDER: gpu
 
+  flowxer:                         # required: the media engine runs on the GPU (1 + MEs NVENC sessions)
+    deploy: *gpu
+    environment:
+      NVIDIA_DRIVER_CAPABILITIES: compute,video,utility
+
   webrtc-monitor:
     deploy: *gpu
     environment:

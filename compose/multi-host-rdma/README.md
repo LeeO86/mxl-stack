@@ -8,7 +8,8 @@ fallback.
 ```
 host-a                                       host-b
  registry (3210/3211)                         multiviewer
- test-player ─► /Volumes/mxl/player           webrtc-monitor
+ crosspoint (8099)                            webrtc-monitor
+ test-player ─► /Volumes/mxl/player           FlowXer (optional, GPU)
                        │                          ▲
  fabrics-agent ◄── RDMA 198.51.100.1/.2 ──► fabrics-agent ─► /Volumes/mxl/mirror-<domain id>
 ```
@@ -25,8 +26,8 @@ hosts or RDMA.
 | File | Use |
 | --- | --- |
 | `fabrics-agent.yaml` | The agent, included by both hosts |
-| `host-a/compose.yaml` | Registry, test player, agent |
-| `host-b/compose.yaml` | Multiviewer, WebRTC monitor (built-in MediaMTX), agent |
+| `host-a/compose.yaml` | Registry, NMOS crosspoint, test player, agent |
+| `host-b/compose.yaml` | Multiviewer, WebRTC monitor (built-in MediaMTX), agent; FlowXer with `--profile flowxer` |
 | `host-*/example.env` | Copy to `.env` on that host |
 
 ```bash
@@ -35,6 +36,18 @@ cd host-a && cp example.env .env && $EDITOR .env && docker compose up -d
 # on host-b
 cd host-b && cp example.env .env && $EDITOR .env && docker compose up -d
 ```
+
+## Route across hosts
+
+Open the crosspoint on host-a (`http://192.0.2.11:8099/`, default login
+`admin` / `admin`, change it). It lists the nodes of both hosts. Connect the
+test player's video and audio to the multiviewer or monitor on host-b like any
+local route; the agent on host-b creates the mirror. With FlowXer on host-b
+(`docker compose --profile flowxer up -d`, NVIDIA GPU needed): route the test
+player to FlowXer's live inputs, FlowXer's PGM to the multiviewer, and raise
+`FLOWXER_LATENCY` if `GET /api/v1/engine` recommends more for mirrored inputs.
+The crosspoint uses `../single-host/crosspoint-settings.json` (registry
+Query API on 127.0.0.1:3211) on its first start.
 
 ## Network
 

@@ -13,7 +13,7 @@ rule are in each repository's README and SPECIFICATION.
 | NMOS IS-04 registry | routing and discovery | yes, one per facility or stack |
 | `fs.inotify.max_user_instances` raised | many flows per host | yes on busy hosts |
 | MediaMTX | WebRTC previews | optional (several functions bring their own) |
-| NVIDIA GPU + Container Toolkit | NVENC previews, CUDA, GPU rendering | optional |
+| NVIDIA GPU + Container Toolkit | NVENC previews, CUDA, GPU rendering | optional; required for FlowXer |
 | RDMA NIC + rdma-core | multi-host (fabrics agent) | only multi-host |
 | Intel E810 + DPDK/VFIO + hugepages | ST 2110 gateway | only ST 2110 |
 | Blackmagic Desktop Video driver | DeckLink | only SDI |
@@ -90,9 +90,12 @@ MXL transport `urn:x-nmos:transport:mxl`, BCP-007-03). Use one static registry:
   nodes can reach (not a hostname, not loopback).
 - `NMOS_SEED` makes every NMOS id (and the output domain id) a stable UUIDv5.
   Give each instance a unique, stable seed.
-- Routing needs an IS-05 controller (for example nmos-js, or `curl` against
-  `/x-nmos/connection/v1.1/single/receivers/<id>/staged`). Several functions
-  also have an IS-05 form in their own UI.
+- Routing needs an IS-05 controller. The examples run
+  [dmf-app-nmos-crosspoint](https://github.com/qvest-digital/dmf-app-nmos-crosspoint);
+  `curl` against `/x-nmos/connection/v1.1/single/receivers/<id>/staged` also
+  works, and several functions have an IS-05 form in their own UI.
+- The crosspoint reads the registry's **Query API** (`P+1`): set it as the
+  static registry with that port. A static registry wins over discovery.
 
 ## inotify limit
 
@@ -140,6 +143,9 @@ sudo sysctl --system
 - Users: multiviewer (CUDA compositor, NVENC preview), replay (NVENC mosaic,
   optical flow), SRT gateway (NVDEC/NVENC), WebRTC monitor and scopes (NVENC
   previews), browser source (GPU rendering). All of them fall back to the CPU.
+- FlowXer renders on the GPU and has no CPU path: one GPU (a time-sliced share
+  is enough), about 0.6-0.8 GiB GPU memory plus clips and stingers, and
+  1 + number of MEs NVENC sessions for its previews.
 - **NVENC session limit.** Consumer GeForce cards allow only a few concurrent
   NVENC sessions per system. Every preview channel and every SRT egress counts.
   Data-centre and professional cards (e.g. L4, A4000/A16) do not have that
@@ -222,6 +228,8 @@ port (`+1`) is the IS-04 WebSocket where a function opens one.
 | mxl-browser-source | 8160 | 3312 | |
 | mxl-scopes | 8170 | 3322 | built-in MediaMTX 8574, 8579, 8578, 8279 |
 | mxl-audio-mixer | 8190 | 3342 | TSL 8910/8911 (move it next to a multiviewer) |
+| FlowXer | 9620 GUI (proxies the API); mixer 9610 and engine 9630 on 127.0.0.1 | 3252 (3253 reserved) | built-in MediaMTX 8989 WHEP, 8988 HLS, 8289 ICE; 8654, 9897 on 127.0.0.1 |
+| dmf-app-nmos-crosspoint | 80 by default (`server.port` in `settings.json`; 8099 in the examples) | | |
 
 Known clashes on one host: the example registry's query WebSocket (3212) and
 mxl-decklink's NMOS port; mxl-decklink and mxl-st2110-gateway on 8080; the

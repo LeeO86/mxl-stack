@@ -1,5 +1,6 @@
 # host-b: the fabrics agent, a multiviewer and a WebRTC monitor that read
-# host-a's flows from the local mirror domains.
+# host-a's flows from the local mirror domains. Optional FlowXer vision mixer
+# (needs an NVIDIA GPU): docker compose --profile flowxer up -d
 include:
   - ../fabrics-agent.yaml
 
@@ -35,12 +36,15 @@ services:
       - mv-config:/config
     restart: unless-stopped
 
-  monitor-config-owner:
+  # Make the named volumes that need it writable for uid 1000 (once).
+  volume-owner:
     image: ghcr.io/leeo86/mxl-webrtc-monitor:1.4.2
     user: "0:0"
-    entrypoint: ["chown", "1000:1000", "/config"]
+    entrypoint: ["chown", "1000:1000", "/v/monitor-config", "/v/flowxer-storage", "/v/flowxer-config"]
     volumes:
-      - monitor-config:/config
+      - monitor-config:/v/monitor-config
+      - flowxer-storage:/v/flowxer-storage
+      - flowxer-config:/v/flowxer-config
 
   # Runs its own MediaMTX (8554 local, 8889 WHEP, 8888 HLS, 8189 ICE).
   webrtc-monitor:
@@ -48,7 +52,7 @@ services:
     network_mode: host
     user: "1000:1000"
     depends_on:
-      monitor-config-owner:
+      volume-owner:
         condition: service_completed_successfully
     environment:
       <<: *nmos
@@ -68,6 +72,61 @@ services:
       - monitor-config:/config
     restart: unless-stopped
 
+  # FlowXer: its live inputs are routed to host-a's flows; the fabrics agent
+  # mirrors them here. Built-in MediaMTX: WHEP 8989, HLS 8988, ICE 8289.
+  flowxer:
+    profiles: [flowxer]
+    image: ghcr.io/firesh0ot/flowxer-vision-mixer:19.26.68
+    network_mode: host
+    user: "1000:1000"
+    init: true
+    shm_size: 2gb
+    depends_on:
+      volume-owner:
+        condition: service_completed_successfully
+    environment:
+      <<: *nmos
+      NMOS_SEED: host-b-flowxer
+      NMOS_LABEL: FlowXer host-b
+      NMOS_PORT: "3252"
+      MXL_OUTPUT_DOMAIN_DIR: /Volumes/mxl/flowxer
+      MEDIAMTX_PUBLIC_IP: ${HOST_IP}
+      FLOWXER_HOST: 127.0.0.1
+      FLOWXER_PORT: "9610"
+      FLOWXER_STATE_DIR: /config
+      FLOWXER_STORAGE_ROOT: /storage
+      FLOWXER_LATENCY: "4"         # raise if GET /api/v1/engine recommends more (mirrored inputs)
+      FLOWXER_API_TOKEN: ${FLOWXER_API_TOKEN:-}
+      NVIDIA_DRIVER_CAPABILITIES: compute,video,utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - type: bind
+        source: ${MXL_ROOT:-/Volumes/mxl}
+        target: /Volumes/mxl
+      - flowxer-storage:/storage
+      - flowxer-config:/config
+    restart: unless-stopped
+
+  flowxer-gui:
+    profiles: [flowxer]
+    image: ghcr.io/firesh0ot/flowxer-gui:19.26.68
+    network_mode: host
+    user: "1000:1000"
+    depends_on: [flowxer]
+    environment:
+      FLOWXER_API_TOKEN: ${FLOWXER_API_TOKEN:-}
+      FLOWXER_MIXER_URL: http://127.0.0.1:9610
+      FLOWXER_GUI_PORT: "9620"
+    restart: unless-stopped
+
 volumes:
   mv-config:
   monitor-config:
+  flowxer-storage:
+  flowxer-config:

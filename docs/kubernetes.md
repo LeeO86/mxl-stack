@@ -17,6 +17,7 @@ from those:
 | mxl-browser-source | [deploy/mxl-browser-source.yaml](https://github.com/LeeO86/mxl-browser-source/blob/main/deploy/mxl-browser-source.yaml), [-gpu](https://github.com/LeeO86/mxl-browser-source/blob/main/deploy/mxl-browser-source-gpu.yaml) |
 | mxl-audio-mixer | [deploy/k8s/deployment.yaml](https://github.com/LeeO86/mxl-audio-mixer/blob/main/deploy/k8s/deployment.yaml) |
 | mxl-fabrics-agent | [deploy/mxl-fabrics-agent.yaml](https://github.com/LeeO86/mxl-fabrics-agent/blob/main/deploy/mxl-fabrics-agent.yaml) (DaemonSet) |
+| FlowXer | [deploy/kubernetes/flowxer.yaml](https://github.com/firesh0ot/FlowXer/blob/main/deploy/kubernetes/flowxer.yaml) (host network), [flowxer-pod-network.yaml](https://github.com/firesh0ot/FlowXer/blob/main/deploy/kubernetes/flowxer-pod-network.yaml) |
 
 ## One pod per function
 
@@ -102,7 +103,9 @@ securityContext:
   Query API `P+1`.
 - Set `NMOS_DNS_SD=false` and `NMOS_REGISTRY_ADDRESS` (Service name or IP) in
   every function. mDNS does not cross the pod network; no Avahi needed.
-- The IS-05 controller must reach every node's `NMOS_HOST_ADDRESS`.
+- The IS-05 controller (e.g. dmf-app-nmos-crosspoint, one Deployment with a
+  PVC for `server/config` and `server/state`) must reach every node's
+  `NMOS_HOST_ADDRESS`. Point it at the registry's Query API (`P+1`).
 
 ## MediaMTX
 

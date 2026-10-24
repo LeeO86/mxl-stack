@@ -7,6 +7,7 @@
 #   docker compose up -d                 # core chain
 #   docker compose --profile extras up -d   # + colour corrector, SRT gateway
 #   docker compose -f compose.yaml -f compose.gpu.yaml up -d   # with an NVIDIA GPU
+#   docker compose -f compose.yaml -f compose.gpu.yaml --profile flowxer up -d   # + FlowXer (needs the GPU)
 #
 # Port plan (host network, one port space):
 #   registry 3210 (registration), 3211 (query), 3212 (query websocket)
@@ -16,6 +17,8 @@
 #   color-corrector 8140 / 3292         replay      8150 / 3302+3303, TSL 8914/8915
 #   browser-source 8160 / 3312          scopes      8170 / 3322
 #   audio-mixer    8190 / 3342, TSL 8916/8917
+#   crosspoint     8099 (NMOS controller UI)
+#   flowxer        9620 GUI, 127.0.0.1:9610 mixer API, 127.0.0.1:9630 engine / 3252
 #   (web port / NMOS port)
 
 x-mxl-root: &mxl-root
@@ -52,6 +55,28 @@ services:
       ADVERTISE_MQTT: "FALSE"
     volumes:
       - ./registry.json:/home/registry.json:ro
+    restart: unless-stopped
+
+  # NMOS controller with a crosspoint view (IS-05 routing of MXL senders and
+  # receivers). UI on http://HOST_IP:8099, first login admin / admin.
+  crosspoint-init:
+    image: ghcr.io/qvest-digital/dmf-app-nmos-crosspoint:4.36
+    entrypoint: ["sh", "-c", "test -f /config/settings.json || cp /seed/settings.json /config/settings.json"]
+    volumes:
+      - ./crosspoint-settings.json:/seed/settings.json:ro
+      - crosspoint-config:/config
+
+  crosspoint:
+    image: ghcr.io/qvest-digital/dmf-app-nmos-crosspoint:4.36
+    network_mode: host
+    depends_on:
+      registry:
+        condition: service_started
+      crosspoint-init:
+        condition: service_completed_successfully
+    volumes:
+      - crosspoint-config:/nmos-crosspoint/server/config
+      - crosspoint-state:/nmos-crosspoint/server/state
     restart: unless-stopped
 
   mediamtx:
@@ -208,13 +233,15 @@ services:
       - browser-config:/config
     restart: unless-stopped
 
-  # The image's /config is not owned by uid 1000; chown the named volume once.
-  monitor-config-owner:
+  # Make the named volumes that need it writable for uid 1000 (once).
+  volume-owner:
     image: ghcr.io/leeo86/mxl-webrtc-monitor:1.4.2
     user: "0:0"
-    entrypoint: ["chown", "1000:1000", "/config"]
+    entrypoint: ["chown", "1000:1000", "/v/monitor-config", "/v/flowxer-storage", "/v/flowxer-config"]
     volumes:
-      - monitor-config:/config
+      - monitor-config:/v/monitor-config
+      - flowxer-storage:/v/flowxer-storage
+      - flowxer-config:/v/flowxer-config
 
   webrtc-monitor:
     image: ghcr.io/leeo86/mxl-webrtc-monitor:1.4.2
@@ -225,7 +252,7 @@ services:
         condition: service_started
       mediamtx:
         condition: service_started
-      monitor-config-owner:
+      volume-owner:
         condition: service_completed_successfully
     environment:
       <<: [*nmos, *preview]
@@ -244,6 +271,53 @@ services:
         target: /Volumes/mxl
         read_only: true
       - monitor-config:/config
+    restart: unless-stopped
+
+  # --- optional: FlowXer vision mixer, needs an NVIDIA GPU (compose.gpu.yaml) ---
+  # docker compose -f compose.yaml -f compose.gpu.yaml --profile flowxer up -d
+
+  flowxer:
+    profiles: [flowxer]
+    image: ghcr.io/firesh0ot/flowxer-vision-mixer:19.26.68
+    network_mode: host
+    user: "1000:1000"
+    init: true
+    shm_size: 2gb
+    depends_on:
+      registry:
+        condition: service_started
+      mediamtx:
+        condition: service_started
+      volume-owner:
+        condition: service_completed_successfully
+    environment:
+      <<: [*nmos, *preview]
+      NMOS_SEED: ${STACK_ID:-stack}-flowxer
+      NMOS_LABEL: FlowXer
+      NMOS_PORT: "3252"
+      MXL_OUTPUT_DOMAIN_DIR: /Volumes/mxl/flowxer
+      FLOWXER_HOST: 127.0.0.1      # API on loopback; the GUI proxies it
+      FLOWXER_PORT: "9610"
+      FLOWXER_STATE_DIR: /config
+      FLOWXER_STORAGE_ROOT: /storage
+      FLOWXER_API_TOKEN: ${FLOWXER_API_TOKEN:-}
+      PREVIEW_PATH_PREFIX: stack/flowxer
+    volumes:
+      - *mxl-root
+      - flowxer-storage:/storage   # media library
+      - flowxer-config:/config
+    restart: unless-stopped
+
+  flowxer-gui:
+    profiles: [flowxer]
+    image: ghcr.io/firesh0ot/flowxer-gui:19.26.68
+    network_mode: host
+    user: "1000:1000"
+    depends_on: [flowxer]
+    environment:
+      FLOWXER_API_TOKEN: ${FLOWXER_API_TOKEN:-}
+      FLOWXER_MIXER_URL: http://127.0.0.1:9610
+      FLOWXER_GUI_PORT: "9620"
     restart: unless-stopped
 
   # --- optional: docker compose --profile extras up -d ---
@@ -300,3 +374,7 @@ volumes:
   monitor-config:
   cc-config:
   srt-config:
+  crosspoint-config:
+  crosspoint-state:
+  flowxer-storage:
+  flowxer-config:

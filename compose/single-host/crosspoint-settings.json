@@ -1,0 +1,16 @@
+{
+    "staticNmosRegistries": [
+        {"ip": "127.0.0.1", "port": 3211, "priority": 10, "domain": ""}
+    ],
+    "registryDiscovery": {"unicastDnssd": false, "domain": ""},
+    "logFiles": "./log/",
+    "logOutput": true,
+    "server": {
+        "port": 8099,
+        "address": "0.0.0.0"
+    },
+    "nmos": {
+        "registryVersions": ["v1.3", "v1.2"],
+        "connectVersions": ["v1.1", "v1.0"]
+    }
+}

@@ -1,4 +1,5 @@
-# host-a: NMOS registry, a test player (the source), and the fabrics agent.
+# host-a: NMOS registry, NMOS crosspoint controller, a test player (the source),
+# and the fabrics agent.
 include:
   - ../fabrics-agent.yaml
 
@@ -25,6 +26,27 @@ services:
       - ../../single-host/registry.json:/home/registry.json:ro
     restart: unless-stopped
 
+  # NMOS controller (crosspoint view) for both hosts: http://<host-a>:8099
+  crosspoint-init:
+    image: ghcr.io/qvest-digital/dmf-app-nmos-crosspoint:4.36
+    entrypoint: ["sh", "-c", "test -f /config/settings.json || cp /seed/settings.json /config/settings.json"]
+    volumes:
+      - ../../single-host/crosspoint-settings.json:/seed/settings.json:ro
+      - crosspoint-config:/config
+
+  crosspoint:
+    image: ghcr.io/qvest-digital/dmf-app-nmos-crosspoint:4.36
+    network_mode: host
+    depends_on:
+      registry:
+        condition: service_started
+      crosspoint-init:
+        condition: service_completed_successfully
+    volumes:
+      - crosspoint-config:/nmos-crosspoint/server/config
+      - crosspoint-state:/nmos-crosspoint/server/state
+    restart: unless-stopped
+
   test-player:
     image: ghcr.io/leeo86/mxl-test-player:1.2.4
     network_mode: host
@@ -49,3 +71,5 @@ services:
 
 volumes:
   player-config:
+  crosspoint-config:
+  crosspoint-state:

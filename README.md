@@ -40,13 +40,14 @@ flowchart LR
     MXLa <--> AM[audio-mixer]
     MXLa <--> RP[replay]
     MXLa <--> CC[color-corrector]
+    MXLa <--> FX[FlowXer vision mixer]
     MXLa --> MON[webrtc-monitor]
     MXLa <--> FA[fabrics-agent]
   end
   FA <-->|RDMA / TCP| FB[fabrics-agent on host-b]
   MON -->|RTSP| MTX[MediaMTX] -->|WebRTC| Browser
   REG[NMOS registry<br/>IS-04] -.registration.- MXLa
-  CTRL[NMOS controller<br/>IS-05] -.routing.- REG
+  CTRL[NMOS crosspoint<br/>IS-05 controller] -.routing.- REG
 ```
 
 - Every function is one container and one NMOS node. It writes its own MXL
@@ -59,7 +60,8 @@ flowchart LR
 
 ## Media functions
 
-Images are on GitHub Container Registry. Release tags are `X.Y.Z`, `X.Y` and
+FlowXer lives in its own GitHub account and has its own license (see its
+repository). Images are on GitHub Container Registry. Release tags are `X.Y.Z`, `X.Y` and
 `X`; there is no `latest` on most repos, so pin a version.
 
 | Function | Purpose | Image | Version |
@@ -76,6 +78,7 @@ Images are on GitHub Container Registry. Release tags are `X.Y.Z`, `X.Y` and
 | [mxl-browser-source](https://github.com/LeeO86/mxl-browser-source) | Offscreen Chromium (CEF) web page as MXL video, key and audio; OGraf graphics | `ghcr.io/leeo86/mxl-browser-source` | 1.3.3 |
 | [mxl-audio-mixer](https://github.com/LeeO86/mxl-audio-mixer) | Broadcast audio engine: matrix, channel strips, DSP, loudness, control room | `ghcr.io/leeo86/mxl-audio-mixer` | 1.4.3 |
 | [mxl-fabrics-agent](https://github.com/LeeO86/mxl-fabrics-agent) | Per-host agent that mirrors flows between hosts over RDMA (MXL Fabrics) | `ghcr.io/leeo86/mxl-fabrics-agent` | 1.7.3 |
+| [FlowXer](https://github.com/firesh0ot/FlowXer) | Vision mixer: up to 4 MEs, keyers and DME boxes, clip players, stingers, tally (TSL), WebRTC preview, widgets. Needs an NVIDIA GPU | `ghcr.io/firesh0ot/flowxer-vision-mixer`, `ghcr.io/firesh0ot/flowxer-gui` | 19.26.68 |
 
 Work in progress (no image yet): [mxl-avsync](https://github.com/LeeO86/mxl-avsync),
 AV sync and latency measurement (specification).
@@ -83,12 +86,17 @@ AV sync and latency measurement (specification).
 Library: [mxl-nmos](https://github.com/LeeO86/mxl-nmos) (0.1.1), a Rust NMOS
 node crate (IS-04, IS-05, BCP-007-03).
 
+### Infrastructure
+
+| Component | Purpose | Image |
+| --- | --- | --- |
+| [nmos-cpp](https://github.com/sony/nmos-cpp) registry | NMOS IS-04 registry (registration and query) | `docker.io/gemini2350/nmos-cpp-registry` (pinned digest in the compose files) |
+| [dmf-app-nmos-crosspoint](https://github.com/qvest-digital/dmf-app-nmos-crosspoint) | NMOS controller with a crosspoint view; connects ST 2110 and BCP-007-03 MXL senders and receivers over IS-05. Fork of [nmos-crosspoint_v3](https://github.com/Gemini2350/nmos-crosspoint_v3); see upstream for licensing | `ghcr.io/qvest-digital/dmf-app-nmos-crosspoint:4.36` |
+| [MediaMTX](https://github.com/bluenviron/mediamtx) | RTSP/WebRTC/HLS server for the browser previews | `bluenviron/mediamtx:1.20.1` |
+
 ### Related projects (third party)
 
-- [FlowXer](https://github.com/firesh0ot/FlowXer): vision mixer for MXL.
 - [obs-mxl-plugin](https://github.com/JohannesItten/obs-mxl-plugin): OBS Studio input and output plugins for MXL.
-- [nmos-cpp](https://github.com/sony/nmos-cpp): NMOS registry and node library used by several functions.
-- [MediaMTX](https://github.com/bluenviron/mediamtx): RTSP/WebRTC/HLS media server for the previews.
 - [Media Transport Library](https://github.com/OpenVisualCloud/Media-Transport-Library): ST 2110 over DPDK, used by the ST 2110 gateway.
 - [mxl-hands-on](https://github.com/cbcrc/mxl-hands-on): MXL tutorial; the `/Volumes/mxl` tmpfs convention comes from there.
 

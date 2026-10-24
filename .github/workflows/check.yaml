@@ -21,4 +21,5 @@ jobs:
             (cd "$d" && docker compose --env-file example.env config -q)
           done
           (cd compose/single-host && docker compose --env-file example.env \
-            -f compose.yaml -f compose.gpu.yaml --profile extras config -q)
+            -f compose.yaml -f compose.gpu.yaml --profile extras --profile flowxer config -q)
+          (cd compose/multi-host-rdma/host-b && docker compose --env-file example.env --profile flowxer config -q)

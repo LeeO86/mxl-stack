@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0 - 2026-10-24
+
+- FlowXer vision mixer (19.26.68) as a media function: README table,
+  requirements and ports, single-host (`--profile flowxer` with the GPU
+  overlay) and host-b of the multi-host example.
+- NMOS crosspoint controller (dmf-app-nmos-crosspoint 4.36) next to the
+  registry in both Compose examples, with routing instructions.
+- Single host: `monitor-config-owner` is now `volume-owner` (also FlowXer's
+  volumes).
+
 ## 0.1.0 - 2026-10-24
 
 - First version: overview of the MXL media functions, host requirements,
