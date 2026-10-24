@@ -1,0 +1,41 @@
+# Overlay for a host with an NVIDIA GPU and the NVIDIA Container Toolkit:
+#   docker compose -f compose.yaml -f compose.gpu.yaml up -d
+# Every service below opens NVENC sessions. Consumer GeForce cards limit the
+# number of concurrent NVENC sessions; count them before adding channels.
+
+x-gpu: &gpu
+  resources:
+    reservations:
+      devices:
+        - driver: nvidia
+          count: 1
+          capabilities: [gpu]
+
+services:
+  multiviewer:
+    deploy: *gpu
+    environment:
+      NVIDIA_DRIVER_CAPABILITIES: compute,video,utility
+
+  scopes:
+    deploy: *gpu
+    environment:
+      NVIDIA_DRIVER_CAPABILITIES: compute,video,utility
+
+  replay:
+    deploy: *gpu
+    environment:
+      NVIDIA_DRIVER_CAPABILITIES: compute,video,utility
+      REPLAY_PREVIEW_MODE: webrtc
+
+  browser-source:
+    deploy: *gpu
+    environment:
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility,graphics
+      BROWSER_RENDER: gpu
+
+  webrtc-monitor:
+    deploy: *gpu
+    environment:
+      NVIDIA_DRIVER_CAPABILITIES: compute,video,utility
+      ENCODER: auto

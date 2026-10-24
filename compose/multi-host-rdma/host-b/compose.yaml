@@ -1,0 +1,73 @@
+# host-b: the fabrics agent, a multiviewer and a WebRTC monitor that read
+# host-a's flows from the local mirror domains.
+include:
+  - ../fabrics-agent.yaml
+
+x-nmos: &nmos
+  NMOS_REGISTRY_ADDRESS: ${NMOS_REGISTRY_ADDRESS}
+  NMOS_REGISTRY_PORT: ${NMOS_REGISTRY_PORT:-3210}
+  NMOS_QUERY_ADDRESS: ${NMOS_REGISTRY_ADDRESS}
+  NMOS_QUERY_PORT: ${NMOS_QUERY_PORT:-3211}
+  NMOS_DNS_SD: "false"
+  NMOS_HOST_ADDRESS: ${HOST_IP}
+  MXL_DOMAIN_SCAN_PATH: /Volumes/mxl
+  MXL_CLEANUP_ON_EXIT: "true"
+  SHUTDOWN_TIMEOUT_S: "10"
+
+services:
+  multiviewer:
+    image: ghcr.io/leeo86/mxl-multiviewer:1.4.6
+    network_mode: host
+    user: "1000:1000"
+    environment:
+      <<: *nmos
+      NMOS_SEED: host-b-mv
+      NMOS_LABEL: Multiviewer host-b
+      MXL_OUTPUT_DOMAIN_DIR: /Volumes/mxl/multiviewer
+      MV_STATE_DIR: /config
+      MV_BACKEND: auto
+      WEB_PORT: "8110"
+      NMOS_PORT: "3262"
+    volumes:
+      - type: bind
+        source: ${MXL_ROOT:-/Volumes/mxl}
+        target: /Volumes/mxl
+      - mv-config:/config
+    restart: unless-stopped
+
+  monitor-config-owner:
+    image: ghcr.io/leeo86/mxl-webrtc-monitor:1.4.2
+    user: "0:0"
+    entrypoint: ["chown", "1000:1000", "/config"]
+    volumes:
+      - monitor-config:/config
+
+  # Runs its own MediaMTX (8554 local, 8889 WHEP, 8888 HLS, 8189 ICE).
+  webrtc-monitor:
+    image: ghcr.io/leeo86/mxl-webrtc-monitor:1.4.2
+    network_mode: host
+    user: "1000:1000"
+    depends_on:
+      monitor-config-owner:
+        condition: service_completed_successfully
+    environment:
+      <<: *nmos
+      NMOS_SEED: host-b-monitor
+      NMOS_LABEL: WebRTC monitor host-b
+      MONITOR_PUBLIC_IP: ${HOST_IP}
+      MONITOR_CHANNELS: "2"
+      ENCODER: auto
+      STATE_DIR: /config
+      WEB_PORT: "8100"
+      NMOS_PORT: "3242"
+    volumes:
+      - type: bind
+        source: ${MXL_ROOT:-/Volumes/mxl}
+        target: /Volumes/mxl
+        read_only: true
+      - monitor-config:/config
+    restart: unless-stopped
+
+volumes:
+  mv-config:
+  monitor-config:

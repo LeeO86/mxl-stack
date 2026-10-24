@@ -1,0 +1,51 @@
+# host-a: NMOS registry, a test player (the source), and the fabrics agent.
+include:
+  - ../fabrics-agent.yaml
+
+x-nmos: &nmos
+  NMOS_REGISTRY_ADDRESS: ${NMOS_REGISTRY_ADDRESS}
+  NMOS_REGISTRY_PORT: ${NMOS_REGISTRY_PORT:-3210}
+  NMOS_QUERY_ADDRESS: ${NMOS_REGISTRY_ADDRESS}
+  NMOS_QUERY_PORT: ${NMOS_QUERY_PORT:-3211}
+  NMOS_DNS_SD: "false"
+  NMOS_HOST_ADDRESS: ${HOST_IP}
+  MXL_DOMAIN_SCAN_PATH: /Volumes/mxl
+  MXL_CLEANUP_ON_EXIT: "true"
+  SHUTDOWN_TIMEOUT_S: "10"
+
+services:
+  # One registry for both hosts (registration 3210, query 3211).
+  registry:
+    image: docker.io/gemini2350/nmos-cpp-registry:sha-53481ff@sha256:3c2fa0793ce336e4176487878758efcbd5c61414c5b90433f3758851615f1c91
+    network_mode: host
+    environment:
+      RUN_MQTT: "FALSE"
+      ADVERTISE_MQTT: "FALSE"
+    volumes:
+      - ../../single-host/registry.json:/home/registry.json:ro
+    restart: unless-stopped
+
+  test-player:
+    image: ghcr.io/leeo86/mxl-test-player:1.2.4
+    network_mode: host
+    user: "1000:1000"
+    depends_on: [registry]
+    environment:
+      <<: *nmos
+      NMOS_SEED: host-a-player
+      NMOS_LABEL: Test player host-a
+      MXL_OUTPUT_DOMAIN_DIR: /Volumes/mxl/player
+      PLAYER_FORMAT: 1080p50
+      PLAYER_OUTPUTS: "1"
+      CONFIG_DIR: /config
+      WEB_PORT: "8130"
+      NMOS_PORT: "3282"
+    volumes:
+      - type: bind
+        source: ${MXL_ROOT:-/Volumes/mxl}
+        target: /Volumes/mxl
+      - player-config:/config
+    restart: unless-stopped
+
+volumes:
+  player-config:

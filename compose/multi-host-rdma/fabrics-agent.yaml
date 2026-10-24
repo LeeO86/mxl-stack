@@ -1,0 +1,46 @@
+# Shared definition of the fabrics agent, included by host-a and host-b.
+# One agent per host. It mirrors remote flows into <MXL_ROOT>/mirror-<domain id>
+# when a local NMOS receiver is connected (IS-05) to a flow of the other host.
+services:
+  fabrics-agent:
+    image: ghcr.io/leeo86/mxl-fabrics-agent:1.7.3
+    network_mode: host             # RDMA and the fabric addresses need the host network
+    pid: host                      # mirror cleanup checks /proc/<pid>/maps of every reader
+    cap_add:
+      - IPC_LOCK                   # RDMA memory registration
+      - SYS_PTRACE                 # read other processes' maps (reader check)
+      - SYS_NICE                   # only for RT_PRIORITY > 0
+    security_opt:
+      - apparmor=unconfined        # the default profile denies ptrace read
+    ulimits:
+      memlock: -1
+    devices:
+      - /dev/infiniband
+    stop_grace_period: 15s
+    environment:
+      HOST_ID: ${HOST_ID:?set HOST_ID}
+      MXL_DOMAIN_SCAN_PATH: /Volumes/mxl
+      STATE_DIR: /config
+      DEFAULT_PROVIDER: ${DEFAULT_PROVIDER:-verbs}
+      PROVIDER_FALLBACK: tcp
+      MIRROR_MODE: eager
+      PEERS: ${PEERS:?set PEERS}
+      NMOS_HOST_ADDRESS: ${HOST_IP:?set HOST_IP}
+      NMOS_REGISTRY_ADDRESS: ${NMOS_REGISTRY_ADDRESS:?set NMOS_REGISTRY_ADDRESS}
+      NMOS_REGISTRY_PORT: ${NMOS_REGISTRY_PORT:-3210}
+      NMOS_DNS_SD: "false"
+      WEB_PORT: "8095"
+      NMOS_PORT: "3232"
+      RT_PRIORITY: "0"             # e.g. 49 for SCHED_FIFO lanes (below 50)
+      TMPFS_RESERVE_MB: "512"
+      MXL_CLEANUP_ON_EXIT: "false"
+      SHUTDOWN_TIMEOUT_S: "10"
+    volumes:
+      - type: bind
+        source: ${MXL_ROOT:-/Volumes/mxl}
+        target: /Volumes/mxl
+      - agent-config:/config
+    restart: unless-stopped
+
+volumes:
+  agent-config:

@@ -1,0 +1,24 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  compose-config:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: docker compose config
+        run: |
+          set -e
+          for d in compose/single-host compose/multi-host-rdma/host-a compose/multi-host-rdma/host-b; do
+            echo "== $d"
+            (cd "$d" && docker compose --env-file example.env config -q)
+          done
+          (cd compose/single-host && docker compose --env-file example.env \
+            -f compose.yaml -f compose.gpu.yaml --profile extras config -q)

@@ -1,0 +1,10 @@
+{
+  "pri": 10,
+  "logging_level": 0,
+  "label": "mxl-stack-registry",
+  "http_port": 3210,
+  "registration_port": 3210,
+  "query_port": 3211,
+  "query_ws_port": 3212,
+  "admin_port": 3211
+}

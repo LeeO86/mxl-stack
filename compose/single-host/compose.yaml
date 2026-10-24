@@ -1,0 +1,302 @@
+# MXL stack on one host.
+#
+# Every service uses host networking: NMOS announces the host's IPv4 address
+# (HOST_IP) and WebRTC needs real host ports. All services share one MXL root,
+# a tmpfs on the host (MXL_ROOT, see docs/requirements.md).
+#
+#   docker compose up -d                 # core chain
+#   docker compose --profile extras up -d   # + colour corrector, SRT gateway
+#   docker compose -f compose.yaml -f compose.gpu.yaml up -d   # with an NVIDIA GPU
+#
+# Port plan (host network, one port space):
+#   registry 3210 (registration), 3211 (query), 3212 (query websocket)
+#   mediamtx 8554 rtsp, 8889 webrtc/whep, 8888 hls, 8189 ice, 127.0.0.1:9997 api
+#   webrtc-monitor 8100 / 3242+3243     multiviewer 8110 / 3262+3263, TSL 8910/8911
+#   srt-gateway    8120 / 3272+3273     test-player 8130 / 3282
+#   color-corrector 8140 / 3292         replay      8150 / 3302+3303, TSL 8914/8915
+#   browser-source 8160 / 3312          scopes      8170 / 3322
+#   audio-mixer    8190 / 3342, TSL 8916/8917
+#   (web port / NMOS port)
+
+x-mxl-root: &mxl-root
+  type: bind
+  source: ${MXL_ROOT:-/Volumes/mxl}
+  target: /Volumes/mxl
+
+x-nmos: &nmos
+  NMOS_REGISTRY_ADDRESS: ${NMOS_REGISTRY_ADDRESS:-127.0.0.1}
+  NMOS_REGISTRY_PORT: ${NMOS_REGISTRY_PORT:-3210}
+  NMOS_QUERY_ADDRESS: ${NMOS_REGISTRY_ADDRESS:-127.0.0.1}
+  NMOS_QUERY_PORT: ${NMOS_QUERY_PORT:-3211}
+  NMOS_DNS_SD: "false"
+  NMOS_HOST_ADDRESS: ${HOST_IP:?set HOST_IP in .env}
+  MXL_DOMAIN_SCAN_PATH: /Volumes/mxl
+  MXL_CLEANUP_ON_EXIT: "true"
+  SHUTDOWN_TIMEOUT_S: "10"
+
+# Shared MediaMTX: functions publish RTSP to it, browsers play WHEP from it.
+x-preview: &preview
+  PREVIEW_PUBLISH_URL: rtsp://127.0.0.1:8554
+  PREVIEW_WHEP_URL: http://${HOST_IP}:8889
+  PREVIEW_HLS_URL: http://${HOST_IP}:8888
+  MEDIAMTX_API_URL: http://127.0.0.1:9997
+
+services:
+  # NMOS IS-04 registry (nmos-cpp). It also advertises itself over mDNS;
+  # the functions do not browse (NMOS_DNS_SD=false) and use the fixed address.
+  registry:
+    image: docker.io/gemini2350/nmos-cpp-registry:sha-53481ff@sha256:3c2fa0793ce336e4176487878758efcbd5c61414c5b90433f3758851615f1c91
+    network_mode: host
+    environment:
+      RUN_MQTT: "FALSE"
+      ADVERTISE_MQTT: "FALSE"
+    volumes:
+      - ./registry.json:/home/registry.json:ro
+    restart: unless-stopped
+
+  mediamtx:
+    image: bluenviron/mediamtx:1.20.1
+    network_mode: host
+    environment:
+      MTX_API: "yes"
+      MTX_APIADDRESS: 127.0.0.1:9997
+      MTX_WEBRTCADDITIONALHOSTS: ${HOST_IP}
+    restart: unless-stopped
+
+  test-player:
+    image: ghcr.io/leeo86/mxl-test-player:1.2.4
+    network_mode: host
+    user: "1000:1000"
+    depends_on: [registry]
+    environment:
+      <<: *nmos
+      NMOS_SEED: ${STACK_ID:-stack}-player
+      NMOS_LABEL: Test player
+      MXL_OUTPUT_DOMAIN_DIR: /Volumes/mxl/player
+      PLAYER_FORMAT: ${VIDEO_FORMAT:-1080p50}
+      PLAYER_OUTPUTS: "2"
+      PLAYER_AUDIO_CHANNELS: "16"
+      PLAYER_LIBRARY_DIR: /data/library
+      CONFIG_DIR: /config
+      WEB_PORT: "8130"
+      NMOS_PORT: "3282"
+    volumes:
+      - *mxl-root
+      - player-library:/data/library
+      - player-config:/config
+    # cpuset: "2-3"
+    restart: unless-stopped
+
+  multiviewer:
+    image: ghcr.io/leeo86/mxl-multiviewer:1.4.6
+    network_mode: host
+    user: "1000:1000"
+    depends_on: [registry, mediamtx]
+    environment:
+      <<: [*nmos, *preview]
+      NMOS_SEED: ${STACK_ID:-stack}-mv
+      NMOS_LABEL: Multiviewer
+      MXL_OUTPUT_DOMAIN_DIR: /Volumes/mxl/multiviewer
+      MV_STATE_DIR: /config
+      MV_BACKEND: auto
+      MV_PREVIEW_MODE: webrtc
+      PREVIEW_PATH_PREFIX: stack/multiviewer
+      WEB_PORT: "8110"
+      NMOS_PORT: "3262"
+      TSL_UDP_PORT: "8910"
+      TSL_TCP_PORT: "8911"
+    volumes:
+      - *mxl-root
+      - mv-config:/config
+    # cpuset: "4-7"
+    restart: unless-stopped
+
+  scopes:
+    image: ghcr.io/leeo86/mxl-scopes:1.1.0
+    network_mode: host
+    user: "1000:1000"
+    depends_on: [registry, mediamtx]
+    environment:
+      <<: [*nmos, *preview]
+      NMOS_SEED: ${STACK_ID:-stack}-scopes
+      NMOS_LABEL: Scopes
+      MXL_OUTPUT_DOMAIN_DIR: /Volumes/mxl/scopes
+      SCOPES_MODE: rgb-parade
+      PREVIEW_PATH_PREFIX: stack/scopes
+      WEB_PORT: "8170"
+      NMOS_PORT: "3322"
+    volumes:
+      - *mxl-root
+      - scopes-config:/config
+    # cpuset: "8"
+    restart: unless-stopped
+
+  audio-mixer:
+    image: ghcr.io/leeo86/mxl-audio-mixer:1.4.3
+    network_mode: host
+    user: "1000:1000"
+    depends_on: [registry, mediamtx]
+    cap_add: [SYS_NICE]            # SCHED_FIFO for the DSP thread (MIXER_RT_PRIORITY)
+    environment:
+      <<: [*nmos, *preview]
+      NMOS_SEED: ${STACK_ID:-stack}-mixer
+      NMOS_LABEL: Audio mixer
+      MXL_OUTPUT_DOMAIN_DIR: /Volumes/mxl/audio-mixer
+      MIXER_STATE_DIR: /config
+      MIXER_INPUT_FLOWS: "8"       # each input flow costs one inotify instance
+      MIXER_RT_PRIORITY: "49"      # keep below 50 (kernel IRQ threads)
+      PREVIEW_PATH_PREFIX: stack/audio-mixer
+      WEB_PORT: "8190"
+      NMOS_PORT: "3342"
+      TSL_UDP_PORT: "8916"         # 8910/8911 are the multiviewer's
+      TSL_TCP_PORT: "8917"
+    volumes:
+      - *mxl-root
+      - mixer-config:/config
+    # cpuset: "10-11"              # an even number of whole cores (DSP thread gets one)
+    restart: unless-stopped
+
+  replay:
+    image: ghcr.io/leeo86/mxl-replay:1.8.1
+    network_mode: host
+    depends_on: [registry, mediamtx]
+    environment:
+      <<: [*nmos, *preview]
+      NMOS_SEED: ${STACK_ID:-stack}-replay
+      NMOS_LABEL: Replay
+      MXL_OUTPUT_DOMAIN_DIR: /Volumes/mxl/replay
+      REPLAY_FORMAT: ${VIDEO_FORMAT:-1080p50}
+      REPLAY_INPUTS: "2"
+      REPLAY_CHANNELS: "2"
+      REPLAY_STORAGE_DIR: /data/replay
+      REPLAY_STATE_DIR: /config
+      REPLAY_BUFFER_HOURS: "0.25"
+      REPLAY_PREVIEW_MODE: jpeg    # webrtc needs NVENC (compose.gpu.yaml)
+      PREVIEW_PATH_PREFIX: stack/replay
+      WEB_PORT: "8150"
+      NMOS_PORT: "3302"
+      TSL_UDP_PORT: "8914"
+      TSL_TCP_PORT: "8915"
+    volumes:
+      - *mxl-root
+      # Put the buffer on a dedicated local NVMe in production (see the repo README).
+      - replay-data:/data/replay
+      - replay-config:/config
+    restart: unless-stopped
+
+  browser-source:
+    image: ghcr.io/leeo86/mxl-browser-source:1.3.3
+    network_mode: host
+    user: "1000:1000"
+    depends_on: [registry]
+    shm_size: 1gb
+    tmpfs: [/tmp]
+    ulimits:
+      nofile: 65536
+      rtprio: 10                   # SCHED_FIFO for tick/converter threads; SYS_NICE alone does not help uid 1000
+    stop_grace_period: 20s
+    environment:
+      <<: *nmos
+      NMOS_SEED: ${STACK_ID:-stack}-browser
+      NMOS_LABEL: Browser source
+      MXL_OUTPUT_DOMAIN_DIR: /Volumes/mxl/browser-source
+      BROWSER_RENDER: auto
+      WEB_PORT: "8160"
+      NMOS_PORT: "3312"
+    volumes:
+      - *mxl-root
+      - browser-config:/config
+    restart: unless-stopped
+
+  # The image's /config is not owned by uid 1000; chown the named volume once.
+  monitor-config-owner:
+    image: ghcr.io/leeo86/mxl-webrtc-monitor:1.4.2
+    user: "0:0"
+    entrypoint: ["chown", "1000:1000", "/config"]
+    volumes:
+      - monitor-config:/config
+
+  webrtc-monitor:
+    image: ghcr.io/leeo86/mxl-webrtc-monitor:1.4.2
+    network_mode: host
+    user: "1000:1000"
+    depends_on:
+      registry:
+        condition: service_started
+      mediamtx:
+        condition: service_started
+      monitor-config-owner:
+        condition: service_completed_successfully
+    environment:
+      <<: [*nmos, *preview]
+      NMOS_SEED: ${STACK_ID:-stack}-monitor
+      NMOS_LABEL: WebRTC monitor
+      MONITOR_PUBLIC_IP: ${HOST_IP}
+      MONITOR_CHANNELS: "4"
+      ENCODER: auto
+      PREVIEW_PATH_PREFIX: stack/monitor
+      STATE_DIR: /config
+      WEB_PORT: "8100"
+      NMOS_PORT: "3242"
+    volumes:
+      - type: bind
+        source: ${MXL_ROOT:-/Volumes/mxl}
+        target: /Volumes/mxl
+        read_only: true
+      - monitor-config:/config
+    restart: unless-stopped
+
+  # --- optional: docker compose --profile extras up -d ---
+
+  color-corrector:
+    profiles: [extras]
+    image: ghcr.io/leeo86/mxl-color-corrector:1.2.3
+    network_mode: host
+    user: "1000:1000"
+    depends_on: [registry]
+    environment:
+      <<: *nmos
+      NMOS_SEED: ${STACK_ID:-stack}-cc
+      NMOS_LABEL: Colour corrector
+      MXL_OUTPUT_DOMAIN_DIR: /Volumes/mxl/color-corrector
+      CC_CHANNELS: "1"
+      CC_STATE_DIR: /config
+      WEB_PORT: "8140"
+      NMOS_PORT: "3292"
+    volumes:
+      - *mxl-root
+      - cc-config:/config
+    restart: unless-stopped
+
+  srt-gateway:
+    profiles: [extras]
+    image: ghcr.io/leeo86/mxl-srt-gateway:1.4.4
+    network_mode: host
+    depends_on: [registry]
+    environment:
+      <<: *nmos
+      NMOS_SEED: ${STACK_ID:-stack}-srtgw
+      NMOS_LABEL: SRT gateway
+      MXL_OUTPUT_DOMAIN_DIR: /Volumes/mxl/srt-gateway
+      STATE_DIR: /config
+      SRTGW_PUBLIC_IP: ${HOST_IP}
+      SRT_PORT_RANGE: 9000-9099
+      WEB_PORT: "8120"
+      NMOS_PORT: "3272"
+    volumes:
+      - *mxl-root
+      - srt-config:/config
+    restart: unless-stopped
+
+volumes:
+  player-library:
+  player-config:
+  mv-config:
+  scopes-config:
+  mixer-config:
+  replay-data:
+  replay-config:
+  browser-config:
+  monitor-config:
+  cc-config:
+  srt-config:
