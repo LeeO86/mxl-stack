@@ -89,7 +89,7 @@ services:
     restart: unless-stopped
 
   test-player:
-    image: ghcr.io/leeo86/mxl-test-player:1.2.4
+    image: ghcr.io/leeo86/mxl-test-player:1.3.1
     network_mode: host
     user: "1000:1000"
     depends_on: [registry]
@@ -137,7 +137,7 @@ services:
     restart: unless-stopped
 
   scopes:
-    image: ghcr.io/leeo86/mxl-scopes:1.1.0
+    image: ghcr.io/leeo86/mxl-scopes:1.2.1
     network_mode: host
     user: "1000:1000"
     depends_on: [registry, mediamtx]
@@ -157,7 +157,7 @@ services:
     restart: unless-stopped
 
   audio-mixer:
-    image: ghcr.io/leeo86/mxl-audio-mixer:1.4.3
+    image: ghcr.io/leeo86/mxl-audio-mixer:1.6.0
     network_mode: host
     user: "1000:1000"
     depends_on: [registry, mediamtx]
@@ -182,9 +182,15 @@ services:
     restart: unless-stopped
 
   replay:
-    image: ghcr.io/leeo86/mxl-replay:1.8.1
+    image: ghcr.io/leeo86/mxl-replay:1.8.7
     network_mode: host
-    depends_on: [registry, mediamtx]
+    depends_on:
+      registry:
+        condition: service_started
+      mediamtx:
+        condition: service_started
+      volume-owner:                # the image runs as uid 1000 and has no /config or /data
+        condition: service_completed_successfully
     environment:
       <<: [*nmos, *preview]
       NMOS_SEED: ${STACK_ID:-stack}-replay
@@ -210,7 +216,7 @@ services:
     restart: unless-stopped
 
   browser-source:
-    image: ghcr.io/leeo86/mxl-browser-source:1.3.3
+    image: ghcr.io/leeo86/mxl-browser-source:1.4.0
     network_mode: host
     user: "1000:1000"
     depends_on: [registry]
@@ -237,9 +243,11 @@ services:
   volume-owner:
     image: ghcr.io/leeo86/mxl-webrtc-monitor:1.4.2
     user: "0:0"
-    entrypoint: ["chown", "1000:1000", "/v/monitor-config", "/v/flowxer-storage", "/v/flowxer-config"]
+    entrypoint: ["chown", "1000:1000", "/v/monitor-config", "/v/flowxer-storage", "/v/flowxer-config", "/v/replay-data", "/v/replay-config"]
     volumes:
       - monitor-config:/v/monitor-config
+      - replay-data:/v/replay-data
+      - replay-config:/v/replay-config
       - flowxer-storage:/v/flowxer-storage
       - flowxer-config:/v/flowxer-config
 
@@ -344,7 +352,7 @@ services:
 
   srt-gateway:
     profiles: [extras]
-    image: ghcr.io/leeo86/mxl-srt-gateway:1.4.4
+    image: ghcr.io/leeo86/mxl-srt-gateway:1.5.1
     network_mode: host
     depends_on: [registry]
     environment:

@@ -8,7 +8,15 @@
 - Added mxl-avsync (now released) and more complementary projects (MXL
   docs and awesome-mxl, EASY MXL, mxl-k8s, BCP-007-03).
 - States that this is an independent community project.
-- The Compose examples are unchanged (same pinned images as 0.2.0).
+- Compose examples: current releases. mxl-test-player 1.3.1, mxl-scopes 1.2.1,
+  mxl-audio-mixer 1.6.0, mxl-replay 1.8.7, mxl-browser-source 1.4.0,
+  mxl-srt-gateway 1.5.1, mxl-fabrics-agent 1.7.4 (the others are unchanged).
+  The single-host set was run together on one host with an NVIDIA GPU, every
+  function routed over IS-05. The two-host example passes `docker compose
+  config` only.
+- Single host: the replay could not open its database, because its image runs
+  as uid 1000 and the named volumes for `/config` and `/data/replay` were
+  owned by root. `volume-owner` now hands them to uid 1000 as well.
 
 ## 0.2.0 - 2026-10-24
 
