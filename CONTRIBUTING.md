@@ -5,8 +5,10 @@
 - Here: corrections to the requirements, the Compose examples and the
   Kubernetes notes. Keep them in line with the function READMEs, which are the
   source of truth.
-- When a function releases, update its version in `README.md` and the image
-  tags in `compose/`, and add a line to `CHANGELOG.md`.
+- The README shows each function's latest release as a badge, so a function
+  release needs no change here. Update the image tags in `compose/` only after
+  running the new set together, and add a line to `CHANGELOG.md`.
+- A new function: add a row to its category table in `README.md`.
 - Check before a pull request:
 
   ```bash

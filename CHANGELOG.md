@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0 - unreleased
+
+- README: a summary of what the collection contains, a "What you can build"
+  table, the functions grouped by role with hardware needs and licenses, and
+  release badges instead of version numbers that went stale.
+- Added mxl-avsync (now released), the strom fork (MXL and NMOS blocks) and
+  more complementary projects (MXL docs and awesome-mxl, EASY MXL, mxl-k8s,
+  BCP-007-03).
+- States that this is an independent community project.
+- The Compose examples are unchanged (same pinned images as 0.2.0).
+
 ## 0.2.0 - 2026-10-24
 
 - FlowXer vision mixer (19.26.68) as a media function: README table,
