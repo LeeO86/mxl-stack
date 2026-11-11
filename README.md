@@ -135,7 +135,6 @@ releases and licensing.
 | --- | --- | --- | --- | --- |
 | [mxl-fabrics-agent](https://github.com/LeeO86/mxl-fabrics-agent) | Per-host agent that mirrors flows between hosts over MXL Fabrics, following NMOS connections | RDMA NIC (or TCP) | MIT | ![release](https://img.shields.io/github/v/release/LeeO86/mxl-fabrics-agent?label=) |
 | [mxl-nmos](https://github.com/LeeO86/mxl-nmos) | Rust crate: NMOS node (IS-04, IS-05, BCP-007-03) for MXL media functions. Early, 0.x | — | Apache-2.0 | ![release](https://img.shields.io/github/v/release/LeeO86/mxl-nmos?label=) |
-| [strom (fork)](https://github.com/LeeO86/strom) | Fork of [Eyevinn Strom](https://github.com/Eyevinn/strom), a GStreamer flow engine with a web GUI, with MXL input/output blocks and an NMOS node | CPU; GPU optional | Apache-2.0 | ![release](https://img.shields.io/github/v/release/LeeO86/strom?label=) |
 
 ### Infrastructure used by the examples (third party)
 
