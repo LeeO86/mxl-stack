@@ -3,7 +3,7 @@
 # when a local NMOS receiver is connected (IS-05) to a flow of the other host.
 services:
   fabrics-agent:
-    image: ghcr.io/leeo86/mxl-fabrics-agent:1.7.3
+    image: ghcr.io/leeo86/mxl-fabrics-agent:1.7.4
     network_mode: host             # RDMA and the fabric addresses need the host network
     pid: host                      # mirror cleanup checks /proc/<pid>/maps of every reader
     cap_add:

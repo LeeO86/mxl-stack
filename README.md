@@ -67,6 +67,15 @@ flowchart LR
 - Browser previews are low-rate H.264 published to MediaMTX and played over
   WebRTC (WHEP).
 
+<p>
+  <a href="https://github.com/LeeO86/mxl-multiviewer"><img src="docs/images/multiviewer.png" alt="mxl-multiviewer web UI: a 3x3 multiviewer of MXL flows" width="32%"></a>
+  <a href="https://github.com/firesh0ot/FlowXer"><img src="docs/images/flowxer.png" alt="FlowXer vision mixer web UI" width="32%"></a>
+  <a href="https://github.com/LeeO86/mxl-audio-mixer"><img src="docs/images/audio-mixer.png" alt="mxl-audio-mixer console" width="32%"></a>
+</p>
+
+The single-host example running: multiviewer, FlowXer vision mixer and audio
+mixer. Every function README has a screenshot of its web UI.
+
 ## What you can build
 
 Examples of chains made from these functions. Each arrow is an IS-05
